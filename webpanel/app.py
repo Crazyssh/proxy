@@ -131,6 +131,21 @@ def index():
     return render_template("index.html")
 
 # ================== API ==================
+_public_ip_cache = {"ip": "", "t": 0}
+def public_ip():
+    if _public_ip_cache["ip"] and (time.time() - _public_ip_cache["t"] < 3600):
+        return _public_ip_cache["ip"]
+    try:
+        out = subprocess.run(["curl", "-s", "--max-time", "5", "https://api.ipify.org"],
+                             capture_output=True, text=True, timeout=8)
+        ip = out.stdout.strip()
+        if re.match(r"^\d+\.\d+\.\d+\.\d+$", ip):
+            _public_ip_cache.update(ip=ip, t=time.time())
+            return ip
+    except Exception:
+        pass
+    return ""
+
 @app.route("/api/status")
 @login_required
 def api_status():
@@ -145,6 +160,7 @@ def api_status():
         "start_port": START_PORT,
         "end_port": START_PORT + listen - 1 if listen else START_PORT,
         "total_proxies": len(read_proxies()),
+        "public_ip": public_ip(),
         "sys": si,
     })
 
@@ -176,6 +192,70 @@ def api_delete():
     items = [p["raw"] for p in read_proxies() if p["raw"] != raw]
     write_proxies(items)
     return jsonify({"ok": True, "total": len(items)})
+
+@app.route("/api/proxy/bulk", methods=["POST"])
+@login_required
+def api_bulk():
+    """Tambah banyak proxy sekaligus (paste multi-baris)."""
+    d = request.get_json(force=True)
+    text = d.get("text") or ""
+    existing = [p["raw"] for p in read_proxies()]
+    added, skipped = 0, 0
+    for line in text.splitlines():
+        s = line.strip()
+        if not s or s.upper().startswith("REM") or s.startswith("#"):
+            continue
+        if not re.match(r"^[^:]+:\d+:[^:]+:[^:]+$", s):
+            skipped += 1; continue
+        if s in existing:
+            skipped += 1; continue
+        existing.append(s); added += 1
+    write_proxies(existing)
+    return jsonify({"ok": True, "added": added, "skipped": skipped, "total": len(existing)})
+
+@app.route("/api/proxy/range", methods=["POST"])
+@login_required
+def api_range():
+    """Generate proxy dari range port. Untuk datacenter/residential/mobile."""
+    d = request.get_json(force=True)
+    host = (d.get("host") or "").strip()
+    user = (d.get("user") or "").strip()
+    pwd  = (d.get("pass") or "").strip()
+    try:
+        p_start = int(d.get("port_start"))
+        p_end   = int(d.get("port_end"))
+    except Exception:
+        return jsonify({"error": "Range port tidak valid"}), 400
+    if not host or not user or not pwd:
+        return jsonify({"error": "Host/user/pass wajib diisi"}), 400
+    if p_end < p_start:
+        return jsonify({"error": "Port akhir harus >= port awal"}), 400
+    if (p_end - p_start) > 5000:
+        return jsonify({"error": "Range terlalu besar (maks 5000)"}), 400
+    existing = [p["raw"] for p in read_proxies()]
+    seen = set(existing)
+    added = 0
+    for port in range(p_start, p_end + 1):
+        raw = f"{host}:{port}:{user}:{pwd}"
+        if raw not in seen:
+            existing.append(raw); seen.add(raw); added += 1
+    write_proxies(existing)
+    return jsonify({"ok": True, "added": added, "total": len(existing)})
+
+@app.route("/api/export")
+@login_required
+def api_export():
+    """Download daftar IP_VPS:port untuk dipakai di tools."""
+    host = request.args.get("host", "").strip()
+    fmt  = request.args.get("fmt", "ipport")   # ipport | socks5
+    proxies = read_proxies()
+    lines = []
+    for p in proxies:
+        target = f"{host}:{p['local_port']}" if host else f"127.0.0.1:{p['local_port']}"
+        lines.append(f"socks5://{target}" if fmt == "socks5" else target)
+    body = "\n".join(lines) + "\n"
+    return Response(body, mimetype="text/plain",
+                    headers={"Content-Disposition": "attachment; filename=proxies-local.txt"})
 
 @app.route("/api/action/<name>", methods=["POST"])
 @login_required

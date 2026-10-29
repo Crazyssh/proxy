@@ -83,22 +83,55 @@
   </div>
   <div class="log" id="log"></div>
 
-  <!-- TAMBAH PROXY -->
+  <!-- GENERATE RANGE -->
+  <div class="panel">
+    <h3>⚙️ Generate Range Proxy</h3>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
+      <select id="gType" class="search" style="width:auto;margin:0;">
+        <option value="datacenter.gsocks.net">Datacenter</option>
+        <option value="residential.gsocks.net">Residential</option>
+        <option value="mobile.gsocks.net">Mobile</option>
+        <option value="__custom__">Private / Custom (isi host sendiri)</option>
+      </select>
+      <input id="gHost" class="search" style="flex:1;margin:0;" placeholder="Host (otomatis dari tipe, atau isi IP private)">
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
+      <input id="gUser" class="search" style="flex:1;margin:0;" placeholder="Username">
+      <input id="gPass" class="search" style="flex:1;margin:0;" placeholder="Password">
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+      <input id="gPortStart" class="search" style="width:140px;margin:0;" placeholder="Port awal (10000)">
+      <span style="color:var(--mut)">—</span>
+      <input id="gPortEnd" class="search" style="width:140px;margin:0;" placeholder="Port akhir (10999)">
+      <button class="btn b-start" id="btnRange">Generate</button>
+    </div>
+  </div>
+
+  <!-- TAMBAH / BULK -->
   <div class="panel">
     <h3>➕ Tambah Proxy</h3>
-    <div class="addrow">
-      <input id="newProxy" placeholder="host:port:username:password  (contoh: datacenter.gsocks.net:10000:user:pass)">
+    <div class="addrow" style="margin-bottom:12px;">
+      <input id="newProxy" placeholder="host:port:username:password (satu baris)">
       <button class="btn b-start" id="btnAdd">Tambah</button>
     </div>
+    <textarea id="bulkBox" class="search" style="width:100%;height:90px;resize:vertical;font-family:monospace;"
+      placeholder="Atau paste banyak sekaligus (satu proxy per baris), lalu klik Tambah Banyak"></textarea>
+    <button class="btn b-ghost" id="btnBulk" style="margin-top:10px;">Tambah Banyak</button>
   </div>
 
   <!-- DAFTAR PROXY -->
   <div class="panel">
     <h3>📋 Daftar Proxy <span class="pill" id="cnt">0</span></h3>
-    <input class="search" id="search" placeholder="Cari host / port...">
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:center;">
+      <input class="search" id="search" style="margin:0;" placeholder="Cari host / port...">
+      <span style="flex:1"></span>
+      <button class="btn b-ghost" id="btnCopy">📋 Salin (IP VPS:port)</button>
+      <button class="btn b-ghost" id="btnCopyLocal">📋 Salin (127.0.0.1:port)</button>
+      <button class="btn b-test" id="btnDownload">⬇ Download</button>
+    </div>
     <div class="tablewrap">
       <table>
-        <thead><tr><th>Port Lokal</th><th>Host</th><th>Port DC</th><th>User</th><th>IP Keluar</th><th></th></tr></thead>
+        <thead><tr><th>Port Lokal</th><th>Host</th><th>Port</th><th>User</th><th>IP Keluar</th><th></th></tr></thead>
         <tbody id="rows"></tbody>
       </table>
     </div>
@@ -110,6 +143,7 @@
 <script>
 const $ = s => document.querySelector(s);
 let PROXIES = [];
+let PUBLIC_IP = "";
 
 function toast(msg, ok=true){
   const t=$("#toast"); t.textContent=msg;
@@ -127,6 +161,7 @@ async function loadStatus(){
   $("#st-total").textContent = d.total_proxies;
   $("#st-mem").innerHTML = d.gost_mem_mb + ' <span style="font-size:14px;color:var(--mut)">MB</span>';
   $("#st-sys").textContent = d.sys.ram_used + " / " + d.sys.ram_total + " MB";
+  PUBLIC_IP = d.public_ip || "";
 }
 
 async function loadProxies(){
@@ -202,6 +237,63 @@ $("#btnTest").onclick = async e=>{
     toast("Test selesai");
   }catch(e){toast("Error test",false);}
   btn.disabled=false; btn.innerHTML=orig;
+};
+
+// --- tipe proxy -> auto isi host ---
+$("#gType").onchange = e=>{
+  const v=e.target.value;
+  $("#gHost").value = (v==="__custom__") ? "" : v;
+  $("#gHost").readOnly = (v!=="__custom__");
+};
+$("#gType").dispatchEvent(new Event("change"));
+
+// --- generate range ---
+$("#btnRange").onclick = async e=>{
+  const body={
+    host: $("#gHost").value.trim(),
+    user: $("#gUser").value.trim(),
+    pass: $("#gPass").value.trim(),
+    port_start: $("#gPortStart").value.trim(),
+    port_end: $("#gPortEnd").value.trim()
+  };
+  if(!body.host||!body.user||!body.pass){toast("Host/user/pass wajib",false);return;}
+  const btn=e.target,orig=btn.innerHTML;btn.disabled=true;btn.innerHTML='<span class="spin"></span>';
+  const r=await fetch("/api/proxy/range",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+  const d=await r.json();
+  btn.disabled=false;btn.innerHTML=orig;
+  if(r.ok){toast(`Ditambah ${d.added} proxy (total ${d.total})`);loadProxies();loadStatus();}
+  else toast(d.error||"Gagal",false);
+};
+
+// --- bulk add ---
+$("#btnBulk").onclick = async e=>{
+  const text=$("#bulkBox").value.trim();
+  if(!text){toast("Textarea kosong",false);return;}
+  const r=await fetch("/api/proxy/bulk",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text})});
+  const d=await r.json();
+  if(r.ok){toast(`Ditambah ${d.added}, dilewati ${d.skipped}`);$("#bulkBox").value="";loadProxies();loadStatus();}
+  else toast(d.error||"Gagal",false);
+};
+
+// --- salin & download ---
+function buildList(host){
+  return PROXIES.map(p=> (host? host : "127.0.0.1")+":"+p.local_port ).join("\n");
+}
+async function copyText(txt){
+  try{ await navigator.clipboard.writeText(txt); toast("Disalin ke clipboard"); }
+  catch(e){
+    const ta=document.createElement("textarea");ta.value=txt;document.body.appendChild(ta);
+    ta.select();document.execCommand("copy");ta.remove();toast("Disalin");
+  }
+}
+$("#btnCopy").onclick = ()=>{
+  if(!PUBLIC_IP){toast("IP VPS belum terdeteksi, pakai salin 127.0.0.1",false);return;}
+  copyText(buildList(PUBLIC_IP));
+};
+$("#btnCopyLocal").onclick = ()=> copyText(buildList(""));
+$("#btnDownload").onclick = ()=>{
+  const host = PUBLIC_IP || "";
+  window.location = "/api/export?fmt=ipport" + (host?("&host="+host):"");
 };
 
 loadStatus(); loadProxies();
