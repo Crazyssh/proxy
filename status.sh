@@ -16,33 +16,26 @@ echo -e "  ║   ${W}P R O X Y   S T A T U S   D A S H B O A R D${B}            
 echo "  ╚══════════════════════════════════════════════════════════╝"
 echo -e "${N}"
 
-# status proses
-if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
-  PID=$(cat "$PIDFILE")
+# status proses (mode 1 proses/proxy)
+RUNNING=$(pgrep -x gost | wc -l)
+LISTENING=$(ss -tlnp 2>/dev/null | grep -c "gost")
+if [ "$RUNNING" -gt 0 ]; then
   STATE="${G}● RUNNING${N}"
 else
-  PID="-"
   STATE="${R}● STOPPED${N}"
 fi
-
-TOTAL=0
-[ -f "$CONF" ] && TOTAL=$(grep -cE '^\s*-\s*name:\s*svc-' "$CONF")
-END_PORT=$((START_PORT + TOTAL - 1))
-LISTENING=$(ss -tlnp 2>/dev/null | grep -c "gost")
+END_PORT=$((START_PORT + LISTENING - 1))
 
 echo -e "  ${W}Status${N}        : $STATE"
-echo -e "  ${W}PID${N}           : $PID"
-echo -e "  ${W}Total proxy${N}   : ${G}${TOTAL}${N}"
-echo -e "  ${W}Port lokal${N}    : 127.0.0.1:${START_PORT} ${D}..${N} 127.0.0.1:${END_PORT}"
+echo -e "  ${W}Proses gost${N}   : ${G}${RUNNING}${N}"
 echo -e "  ${W}Listening${N}     : ${G}${LISTENING}${N} socket"
+echo -e "  ${W}Port lokal${N}    : 127.0.0.1:${START_PORT} ${D}..${N} 127.0.0.1:${END_PORT}"
 echo ""
 
-# resource proses
-if [ "$PID" != "-" ]; then
-  read -r CPU MEM RSS <<< "$(ps -p "$PID" -o %cpu=,%mem=,rss= 2>/dev/null)"
-  RSS_MB=$(( ${RSS:-0} / 1024 ))
-  echo -e "  ${W}CPU proses${N}    : ${CPU:-0}%"
-  echo -e "  ${W}RAM proses${N}    : ${MEM:-0}%  (${RSS_MB} MB)"
+# total RAM semua proses gost
+if [ "$RUNNING" -gt 0 ]; then
+  TOTMEM=$(ps -C gost -o rss= 2>/dev/null | awk '{s+=$1} END{print int(s/1024)}')
+  echo -e "  ${W}RAM total gost${N}: ${TOTMEM:-0} MB  ${D}(${RUNNING} proses)${N}"
 fi
 
 # resource sistem

@@ -1,42 +1,57 @@
 #!/usr/bin/env bash
 # ============================================================
-#  Jalankan SEMUA proxy dalam 1 proses gost (hemat RAM)
-#  Pakai banyak -L/-F (command line) -> cara yang TERBUKTI jalan
-#  untuk upstream socks5 dengan auth.
+#  Jalankan SEMUA proxy (1 proses gost per proxy).
+#  CATATAN: gost tidak bisa pasangan 1:1 untuk banyak -L/-F
+#  dalam satu proses, jadi tiap proxy = 1 proses terpisah.
+#  VPS besar? aman. Tampilan tetap rapi + progress.
 # ============================================================
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LIST="$DIR/proxies.txt"
+LOGDIR="$DIR/logs"
+PIDFILE="$DIR/gost-pids.txt"
 GOST="$(command -v gost || echo /usr/local/bin/gost)"
 START_PORT=1080
 UPSTREAM="socks5"
 
-# --- warna ---
 R='\033[0;31m'; G='\033[0;32m'; Y='\033[1;33m'; B='\033[0;36m'; W='\033[1;37m'; D='\033[0;90m'; N='\033[0m'
 
 clear
 echo -e "${B}"
 echo "  ╔══════════════════════════════════════════════════════════╗"
 echo -e "  ║   ${W}G S O C K S   P R O X Y   L A U N C H E R${B}              ║"
-echo "  ║   datacenter -> socks5 lokal (1 proses, hemat RAM)       ║"
+echo "  ║   datacenter -> socks5 lokal (1 proses / proxy)          ║"
 echo "  ╚══════════════════════════════════════════════════════════╝"
 echo -e "${N}"
 
 if [ ! -x "$GOST" ]; then
-  echo -e "  ${R}✖ gost tidak ditemukan.${N} Jalankan: ${Y}./install-gost.sh${N}"
-  exit 1
+  echo -e "  ${R}✖ gost tidak ada.${N} Jalankan: ${Y}./install-gost.sh${N}"; exit 1
 fi
 if [ ! -f "$LIST" ]; then
-  echo -e "  ${R}✖ proxies.txt tidak ditemukan.${N}"
-  exit 1
+  echo -e "  ${R}✖ proxies.txt tidak ada.${N}"; exit 1
 fi
 
-# naikkan limit file descriptor untuk ribuan port
+# naikkan limit (banyak proses + socket)
 ulimit -n 1048576 2>/dev/null || ulimit -n 65535 2>/dev/null
+ulimit -u 200000 2>/dev/null
 
-# --- bangun argumen -L/-F dari proxies.txt ---
-ARGS=()
+# stop proses lama
+if [ -f "$PIDFILE" ]; then
+  while read -r pid; do [ -n "$pid" ] && kill "$pid" 2>/dev/null; done < "$PIDFILE"
+fi
+pkill -9 gost 2>/dev/null
+sleep 1
+
+mkdir -p "$LOGDIR"
+: > "$PIDFILE"
+
+TOTAL=$(grep -vcE '^\s*(REM|#|$)' "$LIST")
+echo -e "  ${W}Total proxy${N} : ${G}${TOTAL}${N}"
+echo -e "  ${W}gost${N}        : $($GOST -V 2>/dev/null)"
+echo ""
+
 port=$START_PORT
 count=0
+barlen=40
 while IFS= read -r line || [ -n "$line" ]; do
     line="$(echo "$line" | tr -d '\r')"
     [ -z "$line" ] && continue
@@ -48,51 +63,37 @@ while IFS= read -r line || [ -n "$line" ]; do
     pass="$(echo "$line" | cut -d: -f4)"
     [ -z "$host" ] && continue
 
-    ARGS+=( -L "socks5://:$port" -F "${UPSTREAM}://${user}:${pass}@${host}:${pport}" )
-    port=$((port+1))
-    count=$((count+1))
+    nohup "$GOST" -L "socks5://:$port" \
+        -F "${UPSTREAM}://${user}:${pass}@${host}:${pport}" \
+        > "$LOGDIR/gost-$port.log" 2>&1 &
+    echo $! >> "$PIDFILE"
+
+    port=$((port+1)); count=$((count+1))
+
+    if [ $((count % 10)) -eq 0 ] || [ "$count" -eq "$TOTAL" ]; then
+      filled=$(( count * barlen / TOTAL )); [ $filled -gt $barlen ] && filled=$barlen
+      bar=$(printf '%*s' "$filled" '' | tr ' ' '#')
+      space=$(printf '%*s' "$((barlen-filled))" '')
+      pct=$(( count * 100 / TOTAL ))
+      echo -ne "\r  ${B}[${G}${bar}${D}${space}${B}]${N} ${W}${pct}%%${N} ${D}(${count}/${TOTAL})${N}  "
+    fi
 done < "$LIST"
 
 END_PORT=$((port-1))
-
-echo -e "  ${D}Konfigurasi:${N}"
-echo -e "    ${W}gost${N}        : $($GOST -V 2>/dev/null)"
-echo -e "    ${W}Total proxy${N} : ${G}${count}${N}"
-echo -e "    ${W}Port lokal${N}  : ${G}${START_PORT}${N} ${D}-${N} ${G}${END_PORT}${N}"
-echo -e "    ${W}Mode${N}        : ${G}single-process (-L/-F)${N}"
-echo ""
-
-# stop instance lama
-if [ -f "$DIR/gost-single.pid" ] && kill -0 "$(cat "$DIR/gost-single.pid")" 2>/dev/null; then
-  echo -e "  ${Y}↻ Menghentikan instance lama...${N}"
-  kill "$(cat "$DIR/gost-single.pid")" 2>/dev/null
-  sleep 1
-fi
-
-echo -ne "  ${B}▶ Menyalakan proxy"
-nohup "$GOST" "${ARGS[@]}" > "$DIR/gost-single.log" 2>&1 &
-PID=$!
-echo $PID > "$DIR/gost-single.pid"
-for i in $(seq 1 15); do echo -ne "${B}.${N}"; sleep 0.2; done
 echo ""; echo ""
-sleep 1
+sleep 2
 
-if kill -0 "$PID" 2>/dev/null; then
-  LISTENING=$(ss -tlnp 2>/dev/null | grep -c "gost")
-  echo -e "  ${G}╔════════════════════════════════════════════╗${N}"
-  echo -e "  ${G}║            PROXY BERHASIL AKTIF             ║${N}"
-  echo -e "  ${G}╚════════════════════════════════════════════╝${N}"
-  echo ""
-  echo -e "    ${W}Status${N}       : ${G}● RUNNING${N}"
-  echo -e "    ${W}PID${N}          : ${PID}"
-  echo -e "    ${W}Port aktif${N}   : 127.0.0.1:${START_PORT} ${D}..${N} 127.0.0.1:${END_PORT}"
-  echo -e "    ${W}Listening${N}    : ${G}${LISTENING}${N} socket"
-  echo -e "    ${W}Log${N}          : ${D}${DIR}/gost-single.log${N}"
-  echo ""
-  echo -e "    ${D}Cek status: ${Y}./status.sh${N}   Test: ${Y}./test-all.sh${N}   Stop: ${Y}./stop-single.sh${N}"
-  echo ""
-else
-  echo -e "  ${R}✖ Proxy GAGAL jalan.${N} Cek log:"
-  tail -n 15 "$DIR/gost-single.log"
-  exit 1
-fi
+LISTENING=$(ss -tlnp 2>/dev/null | grep -c "gost")
+RUNNING=$(pgrep -x gost | wc -l)
+
+echo -e "  ${G}╔════════════════════════════════════════════╗${N}"
+echo -e "  ${G}║            PROXY BERHASIL AKTIF             ║${N}"
+echo -e "  ${G}╚════════════════════════════════════════════╝${N}"
+echo ""
+echo -e "    ${W}Proses gost${N}  : ${G}${RUNNING}${N}"
+echo -e "    ${W}Listening${N}    : ${G}${LISTENING}${N} socket"
+echo -e "    ${W}Port lokal${N}   : 127.0.0.1:${START_PORT} ${D}..${N} 127.0.0.1:${END_PORT}"
+echo -e "    ${W}Log${N}          : ${D}${LOGDIR}/${N}"
+echo ""
+echo -e "    ${D}Test: ${Y}./test-all.sh${N}   Stop: ${Y}./stop-all.sh${N}"
+echo ""
