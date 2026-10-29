@@ -193,6 +193,26 @@ def api_delete():
     write_proxies(items)
     return jsonify({"ok": True, "total": len(items)})
 
+@app.route("/api/proxy/delete-many", methods=["POST"])
+@login_required
+def api_delete_many():
+    """Hapus banyak proxy sekaligus berdasarkan daftar raw."""
+    d = request.get_json(force=True)
+    targets = set(d.get("raws") or [])
+    if not targets:
+        return jsonify({"error": "Tidak ada yang dipilih"}), 400
+    items = [p["raw"] for p in read_proxies() if p["raw"] not in targets]
+    removed = len(read_proxies()) - len(items)
+    write_proxies(items)
+    return jsonify({"ok": True, "removed": removed, "total": len(items)})
+
+@app.route("/api/proxy/clear", methods=["POST"])
+@login_required
+def api_clear():
+    """Hapus SEMUA proxy."""
+    write_proxies([])
+    return jsonify({"ok": True, "total": 0})
+
 @app.route("/api/proxy/bulk", methods=["POST"])
 @login_required
 def api_bulk():

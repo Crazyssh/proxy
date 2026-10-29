@@ -137,9 +137,18 @@
       <button class="btn b-ghost" id="btnCopyLocal">📋 Salin (127.0.0.1:port)</button>
       <button class="btn b-test" id="btnDownload">⬇ Download</button>
     </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:center;">
+      <span id="selInfo" style="color:var(--mut);font-size:13px;">0 dipilih</span>
+      <span style="flex:1"></span>
+      <button class="btn b-stop" id="btnDelSel" disabled>🗑 Hapus Terpilih</button>
+      <button class="btn b-ghost" id="btnDelAll" style="border-color:var(--red);color:var(--red);">Hapus Semua</button>
+    </div>
     <div class="tablewrap">
       <table>
-        <thead><tr><th>Port Lokal</th><th>Host</th><th>Port</th><th>User</th><th>IP Keluar</th><th></th></tr></thead>
+        <thead><tr>
+          <th style="width:36px;"><input type="checkbox" id="chkAll" title="Pilih semua"></th>
+          <th>Port Lokal</th><th>Host</th><th>Port</th><th>User</th><th>IP Keluar</th><th></th>
+        </tr></thead>
         <tbody id="rows"></tbody>
       </table>
     </div>
@@ -191,10 +200,12 @@ function renderRows(list){
   const tb=$("#rows"); tb.innerHTML="";
   list.forEach(p=>{
     const tr=document.createElement("tr");
-    tr.innerHTML = `<td><b>127.0.0.1:${p.local_port}</b></td>
+    const raw = p.raw.replace(/"/g,"&quot;");
+    tr.innerHTML = `<td><input type="checkbox" class="rowchk" data-raw="${raw}"></td>
+      <td><b>127.0.0.1:${p.local_port}</b></td>
       <td>${p.host}</td><td>${p.port}</td><td>${p.user}</td>
       <td id="ip-${p.local_port}" style="color:var(--mut)">—</td>
-      <td><button class="del" data-raw="${p.raw}">hapus</button></td>`;
+      <td><button class="del" data-raw="${raw}">hapus</button></td>`;
     tb.appendChild(tr);
   });
   document.querySelectorAll(".del").forEach(b=>{
@@ -205,6 +216,20 @@ function renderRows(list){
       if(r.ok){toast("Proxy dihapus");loadProxies();} else toast("Gagal hapus",false);
     };
   });
+  document.querySelectorAll(".rowchk").forEach(c=>c.onchange=updateSel);
+  updateSel();
+}
+
+function selectedRaws(){
+  return [...document.querySelectorAll(".rowchk:checked")].map(c=>c.dataset.raw);
+}
+function updateSel(){
+  const n = selectedRaws().length;
+  $("#selInfo").textContent = n + " dipilih";
+  $("#btnDelSel").disabled = n === 0;
+  const all = document.querySelectorAll(".rowchk");
+  const chk = document.querySelectorAll(".rowchk:checked");
+  $("#chkAll").checked = all.length>0 && all.length===chk.length;
 }
 
 $("#search").oninput = e=>{
@@ -312,6 +337,35 @@ $("#btnCopyLocal").onclick = ()=> copyText(buildList(""));
 $("#btnDownload").onclick = ()=>{
   const host = PUBLIC_IP || "";
   window.location = "/api/export?fmt=ipport" + (host?("&host="+host):"");
+};
+
+// --- select all ---
+$("#chkAll").onchange = e=>{
+  document.querySelectorAll(".rowchk").forEach(c=>c.checked=e.target.checked);
+  updateSel();
+};
+
+// --- hapus terpilih ---
+$("#btnDelSel").onclick = async e=>{
+  const raws = selectedRaws();
+  if(!raws.length) return;
+  if(!confirm(`Hapus ${raws.length} proxy terpilih?`)) return;
+  const btn=e.target,orig=btn.innerHTML;btn.disabled=true;btn.innerHTML='<span class="spin"></span>';
+  const r=await fetch("/api/proxy/delete-many",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({raws})});
+  const d=await r.json();
+  btn.disabled=false;btn.innerHTML=orig;
+  if(r.ok){toast(`Dihapus ${d.removed} proxy`);loadProxies();loadStatus();}
+  else toast(d.error||"Gagal",false);
+};
+
+// --- hapus semua ---
+$("#btnDelAll").onclick = async ()=>{
+  if(!confirm("HAPUS SEMUA proxy dari daftar? Ini tidak bisa dibatalkan.")) return;
+  if(!confirm("Yakin? Semua proxy akan dihapus.")) return;
+  const r=await fetch("/api/proxy/clear",{method:"POST"});
+  if(r.ok){toast("Semua proxy dihapus");loadProxies();loadStatus();}
+  else toast("Gagal",false);
 };
 
 loadStatus(); loadProxies();
