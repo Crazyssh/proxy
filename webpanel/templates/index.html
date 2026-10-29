@@ -74,6 +74,14 @@
     <div class="stat"><div class="k">RAM Sistem</div><div class="v" id="st-sys" style="font-size:20px">—</div></div>
   </div>
 
+  <!-- NOTIF PERUBAHAN -->
+  <div id="applyBar" style="display:none;background:rgba(210,153,34,.12);border:1px solid rgba(210,153,34,.4);
+       color:#e3b341;padding:14px 18px;border-radius:12px;margin-bottom:18px;
+       display:none;align-items:center;justify-content:space-between;gap:14px;">
+    <span id="applyMsg">⚠ Ada perubahan daftar proxy yang belum diterapkan.</span>
+    <button class="btn b-start" id="btnApply" style="padding:9px 18px;">Terapkan (Start)</button>
+  </div>
+
   <!-- TOMBOL AKSI -->
   <div class="toolbar">
     <button class="btn b-start" id="btnStart">▶ Start Semua</button>
@@ -162,6 +170,15 @@ async function loadStatus(){
   $("#st-mem").innerHTML = d.gost_mem_mb + ' <span style="font-size:14px;color:var(--mut)">MB</span>';
   $("#st-sys").textContent = d.sys.ram_used + " / " + d.sys.ram_total + " MB";
   PUBLIC_IP = d.public_ip || "";
+  // indikator perubahan belum diterapkan
+  const diff = d.total_proxies - d.listening;
+  const bar = $("#applyBar");
+  if (diff !== 0 && d.total_proxies > 0) {
+    bar.style.display = "flex";
+    $("#applyMsg").textContent = `⚠ ${d.total_proxies} proxy di daftar, tapi ${d.listening} yang jalan. Klik Terapkan untuk sinkron.`;
+  } else {
+    bar.style.display = "none";
+  }
 }
 
 async function loadProxies(){
@@ -210,6 +227,7 @@ async function action(name, btn){
 
 $("#btnStart").onclick = e=>action("start", e.target);
 $("#btnStop").onclick  = e=>action("stop", e.target);
+$("#btnApply").onclick = e=>action("start", e.target);
 $("#btnRefresh").onclick= ()=>{loadStatus();loadProxies();toast("Status diperbarui");};
 
 $("#btnAdd").onclick = async e=>{
