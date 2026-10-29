@@ -50,12 +50,11 @@ while IFS= read -r line || [ -n "$line" ]; do
     forwarder:
       nodes:
         - name: up-$port
-          addr: $host:$pport
+          addr: $user:$pass@$host:$pport
           connector:
             type: $UPSTREAM
-            auth:
-              username: "$user"
-              password: "$pass"
+          dialer:
+            type: tcp
 EOF
     port=$((port+1))
     count=$((count+1))
