@@ -1,0 +1,20 @@
+# systemd service biar web panel jalan otomatis & restart saat reboot.
+# 1. Edit path & password di bawah sesuai punyamu.
+# 2. Copy ke /etc/systemd/system/proxy-panel.service
+# 3. systemctl daemon-reload && systemctl enable --now proxy-panel
+[Unit]
+Description=GSOCKS Proxy Web Panel
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/root/dc-webpanel
+Environment=PANEL_PASSWORD=GANTI_PASSWORD_INI
+Environment=PANEL_PORT=8088
+Environment=PROXY_DIR=/root/dc
+ExecStart=/root/dc-webpanel/venv/bin/python /root/dc-webpanel/app.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

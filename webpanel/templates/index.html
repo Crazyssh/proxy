@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Proxy Panel · Dashboard</title>
+<style>
+  :root{--bg:#0a0e14;--card:#131821;--line:#1f2733;--txt:#e6edf3;--mut:#7d8590;
+        --acc:#3fb950;--accd:#2ea043;--blue:#58a6ff;--red:#f85149;--yel:#d29922;}
+  *{box-sizing:border-box;margin:0;padding:0;font-family:'Segoe UI',system-ui,sans-serif;}
+  body{background:var(--bg);color:var(--txt);min-height:100vh;}
+  header{display:flex;align-items:center;justify-content:space-between;padding:18px 28px;
+         border-bottom:1px solid var(--line);background:var(--card);position:sticky;top:0;z-index:5;}
+  .brand{font-size:20px;font-weight:800;background:linear-gradient(90deg,#3fb950,#58a6ff);
+         -webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+  .logout{color:var(--mut);text-decoration:none;font-size:13px;border:1px solid var(--line);
+          padding:7px 14px;border-radius:8px;transition:.2s;}
+  .logout:hover{border-color:var(--red);color:var(--red);}
+  .wrap{max-width:1200px;margin:0 auto;padding:28px;}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px;}
+  .stat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px;}
+  .stat .k{color:var(--mut);font-size:12px;text-transform:uppercase;letter-spacing:.5px;}
+  .stat .v{font-size:30px;font-weight:800;margin-top:8px;}
+  .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:7px;}
+  .on{background:var(--acc);box-shadow:0 0 10px var(--acc);} .off{background:var(--red);}
+  .toolbar{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:24px;}
+  .btn{padding:12px 22px;border:none;border-radius:10px;font-weight:700;font-size:14px;cursor:pointer;transition:.2s;}
+  .btn:disabled{opacity:.5;cursor:not-allowed;}
+  .b-start{background:var(--acc);color:#06130a;} .b-start:hover:not(:disabled){background:var(--accd);}
+  .b-stop{background:var(--red);color:#1a0505;} .b-stop:hover:not(:disabled){filter:brightness(1.1);}
+  .b-test{background:var(--blue);color:#04121f;} .b-test:hover:not(:disabled){filter:brightness(1.1);}
+  .b-ghost{background:transparent;border:1px solid var(--line);color:var(--txt);}
+  .b-ghost:hover{border-color:var(--blue);}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px;margin-bottom:24px;}
+  .panel h3{font-size:15px;margin-bottom:16px;display:flex;align-items:center;gap:8px;}
+  .addrow{display:flex;gap:10px;flex-wrap:wrap;}
+  .addrow input{flex:1;min-width:220px;padding:12px 14px;background:#0d1117;border:1px solid var(--line);
+                border-radius:9px;color:var(--txt);outline:none;}
+  .addrow input:focus{border-color:var(--acc);}
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);}
+  th{color:var(--mut);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px;}
+  td.ip-ok{color:var(--acc);font-weight:600;} td.ip-fail{color:var(--red);}
+  .pill{font-size:11px;padding:3px 9px;border-radius:20px;background:rgba(88,166,255,.12);color:var(--blue);}
+  .del{background:none;border:1px solid var(--line);color:var(--mut);border-radius:7px;padding:5px 11px;cursor:pointer;font-size:12px;}
+  .del:hover{border-color:var(--red);color:var(--red);}
+  .log{background:#05080d;border:1px solid var(--line);border-radius:10px;padding:14px;
+       font-family:'Consolas',monospace;font-size:12px;color:#8b949e;white-space:pre-wrap;
+       max-height:260px;overflow:auto;margin-top:14px;display:none;}
+  .tablewrap{max-height:460px;overflow:auto;}
+  .search{margin-bottom:14px;padding:10px 14px;background:#0d1117;border:1px solid var(--line);
+          border-radius:9px;color:var(--txt);outline:none;width:260px;}
+  .toast{position:fixed;bottom:24px;right:24px;background:var(--card);border:1px solid var(--line);
+         border-left:4px solid var(--acc);padding:14px 20px;border-radius:10px;display:none;
+         box-shadow:0 10px 40px rgba(0,0,0,.5);z-index:10;}
+  .spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.3);
+        border-top-color:#fff;border-radius:50%;animation:s .7s linear infinite;vertical-align:middle;}
+  @keyframes s{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">⚡ Proxy Panel</div>
+  <a class="logout" href="/logout">Keluar</a>
+</header>
+
+<div class="wrap">
+  <!-- STATISTIK -->
+  <div class="grid">
+    <div class="stat"><div class="k">Status</div><div class="v" id="st-status"><span class="dot off"></span>—</div></div>
+    <div class="stat"><div class="k">Proxy Aktif</div><div class="v" id="st-running">0</div></div>
+    <div class="stat"><div class="k">Total Proxy</div><div class="v" id="st-total">0</div></div>
+    <div class="stat"><div class="k">RAM gost</div><div class="v" id="st-mem">0 <span style="font-size:14px;color:var(--mut)">MB</span></div></div>
+    <div class="stat"><div class="k">RAM Sistem</div><div class="v" id="st-sys" style="font-size:20px">—</div></div>
+  </div>
+
+  <!-- TOMBOL AKSI -->
+  <div class="toolbar">
+    <button class="btn b-start" id="btnStart">▶ Start Semua</button>
+    <button class="btn b-stop"  id="btnStop">■ Stop Semua</button>
+    <button class="btn b-test"  id="btnTest">⟳ Test 10 Proxy</button>
+    <button class="btn b-ghost" id="btnRefresh">↻ Refresh Status</button>
+  </div>
+  <div class="log" id="log"></div>
+
+  <!-- TAMBAH PROXY -->
+  <div class="panel">
+    <h3>➕ Tambah Proxy</h3>
+    <div class="addrow">
+      <input id="newProxy" placeholder="host:port:username:password  (contoh: datacenter.gsocks.net:10000:user:pass)">
+      <button class="btn b-start" id="btnAdd">Tambah</button>
+    </div>
+  </div>
+
+  <!-- DAFTAR PROXY -->
+  <div class="panel">
+    <h3>📋 Daftar Proxy <span class="pill" id="cnt">0</span></h3>
+    <input class="search" id="search" placeholder="Cari host / port...">
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Port Lokal</th><th>Host</th><th>Port DC</th><th>User</th><th>IP Keluar</th><th></th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+let PROXIES = [];
+
+function toast(msg, ok=true){
+  const t=$("#toast"); t.textContent=msg;
+  t.style.borderLeftColor = ok ? "var(--acc)" : "var(--red)";
+  t.style.display="block"; clearTimeout(t._t);
+  t._t=setTimeout(()=>t.style.display="none",3000);
+}
+
+async function loadStatus(){
+  const r = await fetch("/api/status"); const d = await r.json();
+  $("#st-status").innerHTML = d.active
+    ? '<span class="dot on"></span>RUNNING'
+    : '<span class="dot off"></span>STOPPED';
+  $("#st-running").textContent = d.listening;
+  $("#st-total").textContent = d.total_proxies;
+  $("#st-mem").innerHTML = d.gost_mem_mb + ' <span style="font-size:14px;color:var(--mut)">MB</span>';
+  $("#st-sys").textContent = d.sys.ram_used + " / " + d.sys.ram_total + " MB";
+}
+
+async function loadProxies(){
+  const r = await fetch("/api/proxies"); PROXIES = await r.json();
+  renderRows(PROXIES);
+  $("#cnt").textContent = PROXIES.length;
+}
+
+function renderRows(list){
+  const tb=$("#rows"); tb.innerHTML="";
+  list.forEach(p=>{
+    const tr=document.createElement("tr");
+    tr.innerHTML = `<td><b>127.0.0.1:${p.local_port}</b></td>
+      <td>${p.host}</td><td>${p.port}</td><td>${p.user}</td>
+      <td id="ip-${p.local_port}" style="color:var(--mut)">—</td>
+      <td><button class="del" data-raw="${p.raw}">hapus</button></td>`;
+    tb.appendChild(tr);
+  });
+  document.querySelectorAll(".del").forEach(b=>{
+    b.onclick=async()=>{
+      if(!confirm("Hapus proxy ini?"))return;
+      const r=await fetch("/api/proxy/delete",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({raw:b.dataset.raw})});
+      if(r.ok){toast("Proxy dihapus");loadProxies();} else toast("Gagal hapus",false);
+    };
+  });
+}
+
+$("#search").oninput = e=>{
+  const q=e.target.value.toLowerCase();
+  renderRows(PROXIES.filter(p=>p.host.toLowerCase().includes(q)||String(p.port).includes(q)||String(p.local_port).includes(q)));
+};
+
+async function action(name, btn){
+  const orig=btn.innerHTML; btn.disabled=true; btn.innerHTML='<span class="spin"></span> proses...';
+  const log=$("#log"); log.style.display="block"; log.textContent="Menjalankan "+name+"...";
+  try{
+    const r=await fetch("/api/action/"+name,{method:"POST"});
+    const d=await r.json();
+    log.textContent = d.output || d.error || "selesai";
+    toast(name+" selesai", r.ok);
+  }catch(e){ toast("Error: "+e,false); }
+  btn.disabled=false; btn.innerHTML=orig;
+  loadStatus(); loadProxies();
+}
+
+$("#btnStart").onclick = e=>action("start", e.target);
+$("#btnStop").onclick  = e=>action("stop", e.target);
+$("#btnRefresh").onclick= ()=>{loadStatus();loadProxies();toast("Status diperbarui");};
+
+$("#btnAdd").onclick = async e=>{
+  const raw=$("#newProxy").value.trim(); if(!raw)return;
+  const r=await fetch("/api/proxy/add",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({raw})});
+  const d=await r.json();
+  if(r.ok){toast("Proxy ditambah");$("#newProxy").value="";loadProxies();}
+  else toast(d.error||"Gagal",false);
+};
+
+$("#btnTest").onclick = async e=>{
+  const btn=e.target, orig=btn.innerHTML; btn.disabled=true; btn.innerHTML='<span class="spin"></span> testing...';
+  try{
+    const r=await fetch("/api/test?count=10");
+    const reader=r.body.getReader(); const dec=new TextDecoder(); let buf="";
+    while(true){
+      const {value,done}=await reader.read(); if(done)break;
+      buf+=dec.decode(value,{stream:true}); const lines=buf.split("\n"); buf=lines.pop();
+      lines.forEach(l=>{ if(!l.trim())return;
+        const d=JSON.parse(l); const cell=$("#ip-"+d.port);
+        if(cell){ cell.textContent=d.ok?d.ip:"gagal"; cell.className=d.ok?"ip-ok":"ip-fail"; }
+      });
+    }
+    toast("Test selesai");
+  }catch(e){toast("Error test",false);}
+  btn.disabled=false; btn.innerHTML=orig;
+};
+
+loadStatus(); loadProxies();
+setInterval(loadStatus, 10000);
+</script>
+</body>
+</html>

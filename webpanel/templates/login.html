@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Login · Proxy Panel</title>
+<style>
+  :root{--bg:#0a0e14;--card:#131821;--line:#1f2733;--txt:#e6edf3;--mut:#7d8590;--acc:#3fb950;--accd:#2ea043;}
+  *{box-sizing:border-box;margin:0;padding:0;font-family:'Segoe UI',system-ui,sans-serif;}
+  body{background:radial-gradient(1200px 600px at 50% -10%,#15202b,#0a0e14);color:var(--txt);
+       height:100vh;display:flex;align-items:center;justify-content:center;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:40px;
+        width:360px;box-shadow:0 20px 60px rgba(0,0,0,.5);}
+  .logo{font-size:28px;font-weight:800;text-align:center;margin-bottom:6px;
+        background:linear-gradient(90deg,#3fb950,#58a6ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+  .sub{color:var(--mut);text-align:center;font-size:13px;margin-bottom:28px;}
+  label{display:block;font-size:13px;color:var(--mut);margin-bottom:8px;}
+  input{width:100%;padding:13px 15px;background:#0d1117;border:1px solid var(--line);
+        border-radius:10px;color:var(--txt);font-size:15px;outline:none;transition:.2s;}
+  input:focus{border-color:var(--acc);box-shadow:0 0 0 3px rgba(63,185,80,.15);}
+  button{width:100%;margin-top:20px;padding:13px;background:var(--acc);border:none;border-radius:10px;
+         color:#06130a;font-weight:700;font-size:15px;cursor:pointer;transition:.2s;}
+  button:hover{background:var(--accd);}
+  .err{background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.3);color:#ff7b72;
+       padding:10px 14px;border-radius:9px;font-size:13px;margin-bottom:18px;text-align:center;}
+</style>
+</head>
+<body>
+  <form class="card" method="post">
+    <div class="logo">⚡ Proxy Panel</div>
+    <div class="sub">GSOCKS Control Dashboard</div>
+    {% if err %}<div class="err">{{ err }}</div>{% endif %}
+    <label>Password</label>
+    <input type="password" name="password" autofocus placeholder="Masukkan password">
+    <button type="submit">Masuk</button>
+  </form>
+</body>
+</html>
