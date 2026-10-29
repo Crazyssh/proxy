@@ -1,0 +1,9 @@
+REM Contoh daftar proxy. SALIN file ini jadi "proxies.txt" lalu isi punyamu.
+REM   cp proxies.txt.example proxies.txt
+REM Format: host:port:username:password
+REM
+REM Contoh datacenter gsocks (port 10000-10999, kredensial sama):
+datacenter.gsocks.net:10000:USERNAME_KAMU:PASSWORD_KAMU
+datacenter.gsocks.net:10001:USERNAME_KAMU:PASSWORD_KAMU
+datacenter.gsocks.net:10002:USERNAME_KAMU:PASSWORD_KAMU
+REM ... dst
